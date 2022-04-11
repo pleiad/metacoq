@@ -1,8 +1,14 @@
 From MetaCoq.Template Require Import utils All Checker.
-From MetaCoq.Translations Require Import translation_utils.
 Import MCMonadNotation.
 
 (** * Plugin *)
+
+Class TslIdent := { tsl_ident : ident -> ident }.
+
+Local Instance prime_tsl_ident : TslIdent
+  := {| tsl_ident := fun id => id ^ "'" |}.
+
+Definition nAnon := {| binder_name := nAnon; binder_relevance := Relevant |}.
 
 Fixpoint split_prod (t : term) (n : nat)
   {struct n} : (term * (term -> term)) :=
@@ -39,48 +45,46 @@ Definition mkEq (A t1 t2 : term) : term :=
          inductive_ind := 0 |} [])
     [A; t1; t2]).
 
-Definition ford_type (t : term) (ind_indices : context) : term :=
-    match t with
-    | tApp ind args => tApp ind ()
-Fixpoint add_ford_args (t : term) (ind_indices : context) (ctor_indices : list term)
+Fixpoint ind_args' (from length : nat) {struct length} : list term :=
+  match from , length with
+  | S n , S m => tRel (S n) :: ind_args' n m
+  | _ , _ => []
+  end.
+
+Fixpoint add_constraints (t : term) (n : nat) (ind_indices : context) (ctor_indices : list term)
   {struct ind_indices} : term :=
   match ind_indices , ctor_indices with
   | ii :: iis , ci :: cis =>
-    tProd nAnon (mkEq ii.(decl_type) (tRel 0) ci) (add_ford t iis cis)
-  | iis , cis => t
+    tProd nAnon (mkEq ii.(decl_type) (tRel n) ci) (add_constraints t n iis cis)
+  | _ , _ => t
   end.
 
+Fixpoint add_indices (indices : context) (t : term) {struct indices} : term :=
+  match indices with
+  | ii :: iis => tProd ii.(decl_name) ii.(decl_type) (add_indices iis t)
+  | [] => t
+  end.
 
-Definition tsl_cstr_type (c : constructor_body) (params : context) (ind_indices : context) : term :=
-  let (t, ctor_params) := split_prod c.(cstr_type) (List.length params) in
-  let (t', ctor_args) := split_prod t' (List.length c.(cstr_args)) in
+Definition get_ind (t : term) : term :=
   match t with
-  | tProd na A B => tProd na (tsl_rec0 n A) (tsl_rec0 (n+1) B)
-  | _ => t
+  | tApp ind _ => ind
+  | t => t
   end.
 
-Fixpoint tsl_cstr_type (t : term) (ind_indices : context) (ctor_indices : list term) 
-  {struct t} : term :=
-  match t with
-  | tProd na A B => tProd na (tsl_rec0 n A) (tsl_rec0 (n+1) B)
-  | _ => t
-  end.
+Definition tsl_cstr_type (c : constructor_body) (params : context) (indices : context) : term :=
+  let (t, add_ctor_params) := split_prod c.(cstr_type) (List.length params) in
+  let (t', add_ctor_args) := split_prod t (List.length c.(cstr_args)) in
+  let from := List.length params + (2 * List.length indices) + List.length c.(cstr_args) in
+  let length := List.length params + List.length indices in
+  let ind' := tApp (get_ind t') (ind_args' from length) in
+  add_ctor_params (add_indices indices (add_ctor_args (add_constraints ind' (List.length c.(cstr_args)) indices c.(cstr_indices)))).
 
-
-Definition tsl_mind_body (E : tsl_table) (mp : modpath) (kn : kername)
-           (mind : mutual_inductive_body) : tsl_table * list mutual_inductive_body.
-  refine (_, [{| ind_npars := mind.(ind_npars);
-                 ind_params := mind.(ind_params);
-                 ind_bodies := _;
-                 ind_universes := mind.(ind_universes);
-                 ind_variance := mind.(ind_variance)|}]).
-- refine (let kn' : kername := (mp, tsl_ident kn.2) in
-            fold_left_i (fun E i ind => _ :: _ ++ E) mind.(ind_bodies) []).
-    + (* ind *)
-      exact (IndRef (mkInd kn i), tInd (mkInd kn' i) []).
-    + (* ctors *)
-      refine (fold_left_i (fun E k _ => _ :: E) ind.(ind_ctors) []).
-      exact (ConstructRef (mkInd kn i) k, tConstruct (mkInd kn' i) k []).
+Definition tsl_mind_body (mind : mutual_inductive_body) : mutual_inductive_body.
+  refine {| ind_npars := mind.(ind_npars);
+            ind_params := mind.(ind_params);
+            ind_bodies := _;
+            ind_universes := mind.(ind_universes);
+            ind_variance := mind.(ind_variance)|}.
   - exact mind.(ind_finite).
   - refine (mapi _ mind.(ind_bodies)).
     intros i ind.
@@ -98,10 +102,22 @@ Definition tsl_mind_body (E : tsl_table) (mp : modpath) (kn : kername)
       refine {| cstr_name := tsl_ident c.(cstr_name);
                 cstr_args := c.(cstr_args) ++ ind.(ind_indices);
                 cstr_indices := [];
+                cstr_type := tsl_cstr_type c mind.(ind_params) ind.(ind_indices);
                 cstr_arity := c.(cstr_arity) + List.length (c.(cstr_indices)) |}%nat.
-      refine (subst_app _ [tConstruct (mkInd kn i) k []]).
-      refine (fold_left_i (fun t0 i u  => t0 {S i := u}) _ (tsl_rec1 E c.(cstr_type))).
-      (* [I_n-1; ... I_0] *)
-      refine (rev (mapi (fun i _ => tInd (mkInd kn i) [])
-                              mind.(ind_bodies))).
 Defined.
+
+Definition ford (tm : Ast.term) : TemplateMonad unit
+  := match tm with
+     | tInd ind0 _ =>
+       decl <- tmQuoteInductive (inductive_mind ind0) ;;
+       let ind' := tsl_mind_body decl in
+       tmMkInductive' ind'
+     | _ => tmPrint tm ;; tmFail " is not an inductive"
+     end.
+
+Inductive Vec (A : Type) : nat -> Type :=
+  | vnil : Vec A 0
+  | vcons : forall (n : nat), A -> Vec A n -> Vec A (S n).
+
+MetaCoq Run (ford <% list %>).
+Print natᵗ.
