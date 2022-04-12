@@ -10,6 +10,9 @@ Local Instance prime_tsl_ident : TslIdent
 
 Definition nAnon := {| binder_name := nAnon; binder_relevance := Relevant |}.
 
+Definition collect_indices (inds : list one_inductive_body) : context :=
+    List.concat (List.map (fun i => i.(ind_indices)) inds).
+
 Fixpoint split_prod (t : term) (n : nat)
   {struct n} : (term * (term -> term)) :=
   match t , n with
@@ -72,39 +75,47 @@ Definition get_ind (t : term) : term :=
   end.
 
 Definition tsl_cstr_type (c : constructor_body) (params : context) (indices : context) : term :=
-  let (t, add_ctor_params) := split_prod c.(cstr_type) (List.length params) in
-  let (t', add_ctor_args) := split_prod t (List.length c.(cstr_args)) in
-  let from := List.length params + (2 * List.length indices) + List.length c.(cstr_args) in
-  let length := List.length params + List.length indices in
+  let (t, add_ctor_params) := split_prod c.(cstr_type) #|params| in
+  let (t', add_ctor_args) := split_prod t #|c.(cstr_args)| in
+  let from := #|params| + 2 * #|indices| + #|c.(cstr_args)| in
+  let length := #|params| + #|indices| in
   let ind' := tApp (get_ind t') (ind_args' from length) in
-  add_ctor_params (add_indices indices (add_ctor_args (add_constraints ind' (List.length c.(cstr_args)) indices c.(cstr_indices)))).
+  add_ctor_params (add_indices indices (add_ctor_args (add_constraints ind' #|c.(cstr_args)| indices c.(cstr_indices)))).
 
-Definition tsl_mind_body (mind : mutual_inductive_body) : mutual_inductive_body.
-  refine {| ind_npars := mind.(ind_npars);
-            ind_params := mind.(ind_params);
-            ind_bodies := _;
-            ind_universes := mind.(ind_universes);
-            ind_variance := mind.(ind_variance)|}.
-  - exact mind.(ind_finite).
-  - refine (mapi _ mind.(ind_bodies)).
-    intros i ind.
-    refine {| ind_name := tsl_ident ind.(ind_name);
-              ind_indices := []; (* Remove indices. *)
-              ind_sort := ind.(ind_sort);
-              ind_type := ind.(ind_type);
-              ind_kelim := ind.(ind_kelim);
-              ind_ctors := _;
-              ind_projs := [];
-              ind_relevance := ind.(ind_relevance) |}.
-    + (* constructors *)
-      refine (mapi _ ind.(ind_ctors)).
-      intros k c.
-      refine {| cstr_name := tsl_ident c.(cstr_name);
-                cstr_args := c.(cstr_args) ++ ind.(ind_indices);
-                cstr_indices := [];
-                cstr_type := tsl_cstr_type c mind.(ind_params) ind.(ind_indices);
-                cstr_arity := c.(cstr_arity) + List.length (c.(cstr_indices)) |}%nat.
-Defined.
+Definition tsl_mind_body (mind : mutual_inductive_body) : mutual_inductive_body :=
+  let ind_params' := collect_indices mind.(ind_bodies) ++ mind.(ind_params) in
+  let ind_npars' := #|ind_params'| in
+  {| ind_finite := mind.(ind_finite);
+     ind_npars := ind_npars';
+     ind_params := ind_params';
+     ind_universes := mind.(ind_universes);
+     ind_variance := mind.(ind_variance);
+     ind_bodies := mapi (fun i ind =>
+       {| ind_name := tsl_ident ind.(ind_name);
+          ind_indices := []; (* Remove indices. *)
+          ind_sort := ind.(ind_sort);
+          ind_type := ind.(ind_type); (* TODO: name indices *)
+          ind_kelim := ind.(ind_kelim);
+          ind_projs := [];
+          ind_relevance := ind.(ind_relevance);
+          ind_ctors := mapi (fun k c =>
+            {| cstr_name := tsl_ident c.(cstr_name);
+               cstr_args := c.(cstr_args) ++ ind.(ind_indices);
+               cstr_indices := [];
+               cstr_type := tsl_cstr_type c mind.(ind_params) ind.(ind_indices);
+               cstr_arity := c.(cstr_arity) + #|ind.(ind_indices)| 
+            |}%nat)
+            ind.(ind_ctors)
+       |}) mind.(ind_bodies) 
+  |}.
+
+Definition print_inductive (tm : Ast.term) : TemplateMonad unit
+  := match tm with
+     | tInd ind0 _ =>
+       decl <- tmQuoteInductive (inductive_mind ind0) ;;
+       tmPrint decl
+     | _ => tmPrint tm ;; tmFail " is not an inductive"
+     end.
 
 Definition ford (tm : Ast.term) : TemplateMonad unit
   := match tm with
@@ -119,5 +130,11 @@ Inductive Vec (A : Type) : nat -> Type :=
   | vnil : Vec A 0
   | vcons : forall (n : nat), A -> Vec A n -> Vec A (S n).
 
+Inductive VecF (A B : Type) (n k : nat) : Type :=
+  | vnilf : (n = 0) -> VecF A B n k
+  | vconsf : forall (m : nat), A -> VecF A B m m -> (n = S m) -> VecF A B n k.
+
+MetaCoq Run (print_inductive <% Vec %>).
+MetaCoq Run (print_inductive <% VecF %>).
 MetaCoq Run (ford <% list %>).
 Print natᵗ.
