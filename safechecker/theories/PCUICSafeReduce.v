@@ -29,10 +29,15 @@ Set Equations With UIP.
 
  *)
 
- Notation unkId := "unk".
+ Notation unkId := "castcic_unk".
+ Notation errId := "castcic_err".
 
  Notation tUnk m ui := (tConst (m , unkId) ui).
+ Notation tErr m ui := (tConst (m , errId) ui).
 
+ Definition apply_predicate p t : term :=
+   let tP := it_mkLambda_or_LetIn (inst_case_predicate_context p) (preturn p)
+   in tApp tP t.
 
 (* From Program *)
 Notation " `  t " := (proj1_sig t) (at level 10, t at next level) : metacoq_scope.
@@ -371,16 +376,22 @@ Corollary R_Acc_aux :
   Definition discr_castcic_const (id : ident) : Prop :=
     match compare_ident unkId id with
     | Eq => False
+    | _ => 
+    match compare_ident errId id with
+    | Eq => False
     | _ => True
+    end
     end.
 
   Inductive castcic_const_view : ident -> Type :=
   | castcicview_unk : castcic_const_view unkId
+  | castcicview_err : castcic_const_view errId
   | castcicview_other : forall id, discr_castcic_const id -> castcic_const_view id.
 
   Definition castcic_const_viewc (id : ident) : castcic_const_view id :=
     match id with
     | unkId => castcicview_unk
+    | errId => castcicview_err
     | id => castcicview_other id I
     end.
 
@@ -392,12 +403,14 @@ Corollary R_Acc_aux :
   Inductive construct_view : term -> Type :=
   | view_construct : forall ind n ui, construct_view (tConstruct ind n ui)
   | view_unk : forall m ui, construct_view (tUnk m ui)
+  | view_err : forall m ui, construct_view (tErr m ui)
   | view_other : forall t, discr_construct t -> construct_view t.
 
   Equations construct_viewc t : construct_view t :=
     construct_viewc (tConstruct ind n ui) := view_construct ind n ui ;
     construct_viewc (tConst (m , id) ui) with castcic_const_viewc id := {
       | castcicview_unk := view_unk m ui ;
+      | castcicview_err := view_err m ui ;
       | castcicview_other id discr := view_other (tConst (m , id) ui) discr
     } ;
     construct_viewc t := view_other t I.
@@ -446,6 +459,7 @@ Corollary R_Acc_aux :
   | ccview_construct : forall ind n ui, construct_cofix_view (tConstruct ind n ui)
   | ccview_cofix : forall mfix idx, construct_cofix_view (tCoFix mfix idx)
   | ccview_unk : forall m ui, construct_cofix_view (tUnk m ui)
+  | ccview_err : forall m ui, construct_cofix_view (tErr m ui)
   | ccview_other : forall t, discr_construct_cofix t -> construct_cofix_view t.
 
   Equations cc_viewc t : construct_cofix_view t :=
@@ -453,6 +467,7 @@ Corollary R_Acc_aux :
     cc_viewc (tCoFix mfix idx) := ccview_cofix mfix idx ;
     cc_viewc (tConst (m , id) ui) with castcic_const_viewc id := {
       | castcicview_unk := ccview_unk m ui ;
+      | castcicview_err := ccview_err m ui ;
       | castcicview_other id discr := ccview_other (tConst (m , id) ui) discr
     } ;
     cc_viewc t := ccview_other t I.
@@ -528,6 +543,10 @@ Corollary R_Acc_aux :
                 | @exist (l, θ) eq4 :=
                   rec reduce fn (appstack args (App_l (mkApps (tUnk m ui) l) :: ρ))
                 } ;
+              | view_err m ui with inspect (decompose_stack ρ') := {
+                | @exist (l, θ) eq4 :=
+                  rec reduce fn (appstack args (App_l (mkApps (tErr m ui) l) :: ρ))
+                } ;
               | view_other t ht with inspect (decompose_stack ρ') := {
                 | @exist (l, θ) eq4 :=
                   give (tFix mfix idx) (appstack args (App_l (mkApps t l) :: ρ))
@@ -553,7 +572,8 @@ Corollary R_Acc_aux :
                 rec reduce (tCase ci p (mkApps fn args) brs) π ;
               | @exist None bot := False_rect _ _
               } ;
-            | ccview_unk m ui := give (mkApps (tUnk m ui) args) π ;
+            | ccview_unk m ui := rec reduce (tApp (tUnk m ui) (apply_predicate p (mkApps (tUnk m ui) args))) π ;
+            | ccview_err m ui := rec reduce (tApp (tErr m ui) (apply_predicate p (mkApps (tErr m ui) args))) π ;
             | ccview_other t ht := give (tCase ci p (mkApps t args) brs) π
             }
           }
@@ -805,6 +825,12 @@ Corollary R_Acc_aux :
     todo "unk".
   Qed.
   Next Obligation.
+    todo "err".
+  Qed.
+  Next Obligation.
+    todo "err".
+  Qed.
+  Next Obligation.
     case_eq (decompose_stack π). intros ll π' e.
     pose proof (decompose_stack_eq _ _ _ e). subst.
     clear eq3. specialize (prf _ wfΣ). destruct prf as [r [p p0]].
@@ -958,10 +984,7 @@ Corollary R_Acc_aux :
     todo "tUnk".
   Qed.
   Next Obligation.
-    todo "tUnk".
-  Qed.
-  Next Obligation.
-    todo "tUnk".
+    todo "tErr".
   Qed.
   Next Obligation.
     clear eq reduce h.
@@ -1700,6 +1723,7 @@ Corollary R_Acc_aux :
       destruct (a _ wfΣ) as (?&?&?&?).
       now destruct x.
     - todo "unk fix".
+    - todo "err fix".
     - match type of eq3 with
       | context [ reduce ?x ?y ?z ] =>
         specialize (haux x y z);
@@ -1761,6 +1785,7 @@ Corollary R_Acc_aux :
       apply whnf_mkApps.
       now apply whne_case_noiota.
     - todo "unk".
+    - todo "err".
     - match type of eq with
       | _ = reduce ?x ?y ?z =>
         specialize (haux x y z);

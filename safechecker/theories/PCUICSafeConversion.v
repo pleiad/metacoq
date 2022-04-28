@@ -922,6 +922,7 @@ Section Conversion.
         | @exist (cred, ρ) eq3 with construct_viewc cred := {
           | view_construct ind n ui := Some (fn, appstack l (App_l (zipc (tConstruct ind n ui) ρ) :: θ)) ;
           | view_unk m ui := Some (fn, appstack l (App_l (zipc (tUnk m ui) ρ) :: θ)) ;
+          | view_err m ui := Some (fn, appstack l (App_l (zipc (tErr m ui) ρ) :: θ)) ;
           | view_other cred h' := None
           }
         } ;
@@ -954,6 +955,7 @@ Section Conversion.
     apply_funelim (unfold_one_fix Γ mfix idx π h); intros; try discriminate.
     all: noconf eq.
     2: todo "unk fix".
+    2: todo "err fix".
     unfold zipp.
     pose proof (eq_sym eq2) as eq.
     pose proof (decompose_stack_at_eq _ _ _ _ _ eq). subst.
@@ -1005,6 +1007,7 @@ Section Conversion.
     revert eq.
     apply_funelim (unfold_one_fix Γ mfix idx π h); intros; noconf eq.
     2: todo "unk fix".
+    2: todo "err fix".
     unfold zippx.
     pose proof (eq_sym eq2) as eq.
     pose proof (decompose_stack_at_eq _ _ _ _ _ eq). subst.
@@ -1054,6 +1057,7 @@ Section Conversion.
     revert eq.
     apply_funelim (unfold_one_fix Γ mfix idx π h); intros; noconf eq.
     2: todo "unk fix".
+    2: todo "err fix".
     pose proof (eq_sym eq2) as eq.
     pose proof (decompose_stack_at_eq _ _ _ _ _ eq). subst.
     rewrite !zipc_appstack. cbn.
@@ -1098,6 +1102,7 @@ Section Conversion.
     revert eq.
     apply_funelim (unfold_one_fix Γ mfix idx π h); intros ; noconf eq.
     2: todo "unk fix".
+    2: todo "err fix".
     pose proof (eq_sym eq2) as eq.
     pose proof (decompose_stack_at_eq _ _ _ _ _ eq). subst.
     rewrite !zipc_appstack. cbn.
@@ -1141,6 +1146,7 @@ Section Conversion.
     revert eq.
     apply_funelim (unfold_one_fix Γ mfix idx π h); intros; noconf eq.
     2: todo "unk fix".
+    2: todo "err fix".
     pose proof (eq_sym eq2) as eq.
     pose proof (decompose_stack_at_eq _ _ _ _ _ eq). subst.
     rewrite 2!decompose_stack_appstack. cbn.
@@ -4803,7 +4809,10 @@ Qed.
         } ;
       | ccview_unk m ui with inspect (decompose_stack ρ) := {
         | @exist (args, ξ) eq' := Some (mkApps (tUnk m ui) args)
-      } ;
+        } ;
+      | ccview_err m ui with inspect (decompose_stack ρ) := {
+        | @exist (args, ξ) eq' := Some (mkApps (tErr m ui) args)
+        } ;
       | ccview_other cred _ := None
       }
     }.
@@ -4885,6 +4894,16 @@ Qed.
       pose proof (red_welltyped _ hΣ (h _ wfΣ) r') as h'.
       eapply cored_red_cored.
       + constructor. todo "unk".
+      + eapply red_case_c, r.
+    - clear H H0.
+      simpl_reduce_stack Σ wfΣ.
+      assert (r' : red Σ Γ (tCase ci p c brs)
+                     (tCase ci p (mkApps (tErr m ui) (decompose_stack ρ).1) brs))
+        by eapply red_case_c, r.
+      destruct (hΣ _ wfΣ) as [hΣ].
+      pose proof (red_welltyped _ hΣ (h _ wfΣ) r') as h'.
+      eapply cored_red_cored.
+      + constructor. todo "err".
       + eapply red_case_c, r.
   Qed.
   
