@@ -430,7 +430,9 @@ Corollary R_Acc_aux :
   Inductive red_view : term -> stack -> Type :=
   | red_view_Rel c π : red_view (tRel c) π
   | red_view_LetIn A b B c π : red_view (tLetIn A b B c) π
-  | red_view_Const c u π : red_view (tConst c u) π
+  | red_view_Unk m u π : red_view (tUnk m u) π
+  | red_view_Err m u π : red_view (tErr m u) π
+  | red_view_Const c u π : forall (discr : discr_castcic_const c.2), red_view (tConst c u) π
   | red_view_App f a π : red_view (tApp f a) π
   | red_view_Lambda na A t a args : red_view (tLambda na A t) (App_l a :: args)
   | red_view_Fix mfix idx π : red_view (tFix mfix idx) π
@@ -441,7 +443,11 @@ Corollary R_Acc_aux :
   Equations red_viewc t π : red_view t π :=
     red_viewc (tRel c) π := red_view_Rel c π ;
     red_viewc (tLetIn A b B c) π := red_view_LetIn A b B c π ;
-    red_viewc (tConst c u) π := red_view_Const c u π ;
+    red_viewc (tConst (m , id) u) π with castcic_const_viewc id := {
+      | castcicview_unk := red_view_Unk m u π ;
+      | castcicview_err := red_view_Err m u π ;
+      | castcicview_other id discr := red_view_Const (m , id) u π discr
+    } ;
     red_viewc (tApp f a) π := red_view_App f a π ;
     red_viewc (tLambda na A t) (App_l a :: args) := red_view_Lambda na A t a args ;
     red_viewc (tFix mfix idx) π := red_view_Fix mfix idx π ;
@@ -487,6 +493,18 @@ Corollary R_Acc_aux :
     cc0_viewc (tCoFix mfix idx) := cc0view_cofix mfix idx ;
     cc0_viewc t := cc0view_other t _.
 
+  Equations discr_unk (t : term) : Prop :=
+    discr_unk (tProd _ _ _) := False ;
+    discr_unk _ := True.
+
+  Inductive unk_view : term -> Type :=
+  | unkview_prod : forall na A B, unk_view (tProd na A B)
+  | unkview_other : forall t, discr_unk t -> unk_view t.
+
+  Equations unk_viewc t : unk_view t :=
+    unk_viewc (tProd na A B) := unkview_prod na A B ;
+    unk_viewc t := unkview_other t _.
+
   Equations _reduce_stack (Γ : context) (t : term) (π : stack)
             (h : forall Σ (wfΣ : abstract_env_ext_rel X Σ), welltyped Σ Γ (zip (t,π)))
             (reduce : forall t' π', (forall Σ (wfΣ : abstract_env_ext_rel X Σ), R Σ Γ (t',π') (t,π)) ->
@@ -511,7 +529,7 @@ Corollary R_Acc_aux :
       | false := give (tLetIn A b B c) π
       } ;
 
-    | red_view_Const c u π with RedFlags.delta flags := {
+    | red_view_Const c u π _ with RedFlags.delta flags := {
       | true with inspect (abstract_env_lookup X c) := {
         | @exist (Some (ConstantDecl {| cst_body := Some body |})) eq :=
           let body' := subst_instance u body in
@@ -602,6 +620,22 @@ Corollary R_Acc_aux :
       | false := give (tProj (i, pars, narg) c) π
       } ;
 
+    | red_view_Unk m u π with inspect (decompose_stack_at π 0) := {
+      | @exist (Some (args, t, ρ)) prf with unk_viewc t := {
+        | unkview_prod na A B := rec reduce (tLambda na A (tApp (tUnk m u) B)) π ;
+        | unkview_other t ht := give (tApp (tUnk m u) t)  π
+        } ;
+      |  @exist None bot := give (tUnk m u) π
+    } ;
+
+    | red_view_Err m u π with inspect (decompose_stack_at π 0) := {
+      | @exist (Some (args, t, ρ)) prf with unk_viewc t := {
+        | unkview_prod na A B := rec reduce (tLambda na A (tApp (tErr m u) B)) π ;
+        | unkview_other t ht := give (tApp (tErr m u) t)  π
+        } ;
+      | @exist None bot := give (tErr m u) π
+    } ;
+
     | red_view_other t π discr := give t π
 
     }.
@@ -643,6 +677,28 @@ Corollary R_Acc_aux :
     left. econstructor.
     eapply red1_context.
     econstructor.
+  Qed.
+
+  (* tUnk *)
+  Next Obligation.
+    todo "unk prod".
+  Qed.
+  Next Obligation.
+    todo "unk t".
+  Qed.
+  Next Obligation.
+    todo "unk".
+  Qed.
+
+  (* tErr *)
+  Next Obligation.
+    todo "err prod".
+  Qed.
+  Next Obligation.
+    todo "err t".
+  Qed.
+  Next Obligation.
+    todo "err".
   Qed.
 
   (* tConst *)
@@ -1663,6 +1719,12 @@ Corollary R_Acc_aux :
       assumption.
     - unfold zipp. case_eq (decompose_stack π). intros.
       constructor. constructor. eapply whne_mkApps. eapply whne_letin_nozeta. assumption.
+    - todo "unk".
+    - todo "unk".
+    - todo "unk".
+    - todo "err".
+    - todo "err".
+    - todo "err".
     - unfold zipp. case_eq (decompose_stack π). intros.
       constructor. constructor. eapply whne_mkApps. eapply whne_const_nodelta. assumption.
     - match goal with
