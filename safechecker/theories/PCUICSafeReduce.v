@@ -620,20 +620,26 @@ Corollary R_Acc_aux :
       | false := give (tProj (i, pars, narg) c) π
       } ;
 
-    | red_view_Unk m u π with inspect (decompose_stack_at π 0) := {
-      | @exist (Some (args, t, ρ)) prf with unk_viewc t := {
-        | unkview_prod na A B := rec reduce (tLambda na A (tApp (tUnk m u) B)) π ;
-        | unkview_other t ht := give (tApp (tUnk m u) t)  π
-        } ;
-      |  @exist None bot := give (tUnk m u) π
+    | red_view_Unk m u π with RedFlags.delta flags := {
+      | true with inspect (decompose_stack_at π 0) := {
+        | @exist (Some (args, t, ρ)) prf with unk_viewc t := {
+          | unkview_prod na A B := rec reduce (tLambda na A (tApp (tUnk m u) B)) ρ;
+          | unkview_other t ht := give (tUnk m u) π
+          } ;
+        |  @exist None bot := give (tUnk m u) π
+      } ;
+      |  false := give (tUnk m u) π
     } ;
 
-    | red_view_Err m u π with inspect (decompose_stack_at π 0) := {
-      | @exist (Some (args, t, ρ)) prf with unk_viewc t := {
-        | unkview_prod na A B := rec reduce (tLambda na A (tApp (tErr m u) B)) π ;
-        | unkview_other t ht := give (tApp (tErr m u) t)  π
-        } ;
-      | @exist None bot := give (tErr m u) π
+    | red_view_Err m u π with RedFlags.delta flags := {
+      | true with inspect (decompose_stack_at π 0) := {
+        | @exist (Some (args, t, ρ)) prf with unk_viewc t := {
+          | unkview_prod na A B := rec reduce (tLambda na A (tApp (tErr m u) B)) ρ;
+          | unkview_other t ht := give (tErr m u) π
+          } ;
+        |  @exist None bot := give (tErr m u) π
+      } ;
+      |  false := give (tErr m u) π
     } ;
 
     | red_view_other t π discr := give t π
@@ -686,9 +692,6 @@ Corollary R_Acc_aux :
   Next Obligation.
     todo "unk t".
   Qed.
-  Next Obligation.
-    todo "unk".
-  Qed.
 
   (* tErr *)
   Next Obligation.
@@ -696,9 +699,6 @@ Corollary R_Acc_aux :
   Qed.
   Next Obligation.
     todo "err t".
-  Qed.
-  Next Obligation.
-    todo "err".
   Qed.
 
   (* tConst *)
@@ -1722,6 +1722,8 @@ Corollary R_Acc_aux :
     - todo "unk".
     - todo "unk".
     - todo "unk".
+    - todo "unk".
+    - todo "err".
     - todo "err".
     - todo "err".
     - todo "err".

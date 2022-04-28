@@ -25,32 +25,32 @@ Program Definition eval_compute_cheat (cf := default_checker_flags)
     [] p'.2 (todo "welltyped") in
     PCUICToTemplate.trans tm.
 
-Program Definition add0 (n : nat) :=
-  match n return n + 0 = n with
-  | 0 => _
-  | S m => _
-  end.
-Next Obligation.
-todo "".
-Defined.
-MetaCoq Quote Definition bar := Eval lazy in add0.
-Print bar.
-
 Definition even (n : nat) :=
   match n with
-  | 0 => true
-  | S m => false
+  | 0 => True
+  | S m => False
   end.
 
+Definition idM := forall A, A -> A.
+MetaCoq Quote Recursively Definition foo := (unk idM).
+Definition bar := Eval lazy in eval_compute_cheat foo Monomorphic_ctx.
+Print bar.
+MetaCoq Unquote Definition baz := bar.
+Print baz.
+
 MetaCoq Quote Definition foo := Eval lazy in (even (unk nat)).
-Print foo.
-Definition pd :=
-  match foo with
-  | tCase _ p _ _ => p
-  | _ => mk_predicate [] [] [] foo
-  end.
-Definition foo' := Eval lazy in eval_compute_cheat foo Monomorphic_ctx.
-Print foo'.
-Definition a := inst_case_predicate_context
-MetaCoq Unquote Definition foo'' := foo'.
+MetaCoq Quote Recursively Definition foo' := (add0 (err nat)).
+Definition foo'' := Eval lazy in trans_program (foo'.1, foo).
 Print foo''.
+Definition pd :=
+  match foo''.2 with
+  | tCase _ p _ _ => p
+  | _ => mk_predicate [] [] [] (tRel 1000)
+  end.
+Definition mk_pred_lambda p :=
+  it_mkLambda_or_LetIn (inst_case_predicate_context p) (preturn p).
+Eval lazy in (mk_pred_lambda pd).
+Definition baz := Eval lazy in eval_compute_cheat foo' Monomorphic_ctx.
+Print baz.
+MetaCoq Unquote Definition baz' := baz.
+Print baz'.
