@@ -622,9 +622,11 @@ Corollary R_Acc_aux :
 
     | red_view_Unk m u π with RedFlags.delta flags := {
       | true with inspect (decompose_stack_at π 0) := {
-        | @exist (Some (args, t, ρ)) prf with unk_viewc t := {
-          | unkview_prod na A B := rec reduce (tLambda na A (tApp (tUnk m u) B)) ρ;
-          | unkview_other t ht := give (tUnk m u) π
+        | @exist (Some (args, t, ρ)) prf with inspect (reduce t (App_r (tUnk m u) :: ρ) _) := {
+          | @exist (@exist (t',π') prf') eq' with unk_viewc t' := {
+            | unkview_prod na A B := give (tLambda na A (tApp (tUnk m u) B)) ρ;
+            | unkview_other _ ht := give (tApp (tConst (m, "lolo") u) t') ρ
+            }
           } ;
         |  @exist None bot := give (tUnk m u) π
       } ;
@@ -633,9 +635,11 @@ Corollary R_Acc_aux :
 
     | red_view_Err m u π with RedFlags.delta flags := {
       | true with inspect (decompose_stack_at π 0) := {
-        | @exist (Some (args, t, ρ)) prf with unk_viewc t := {
-          | unkview_prod na A B := rec reduce (tLambda na A (tApp (tErr m u) B)) ρ;
-          | unkview_other t ht := give (tErr m u) π
+        | @exist (Some (args, t, ρ)) prf with inspect (reduce t (App_r (tErr m u) :: ρ) _) := {
+          | @exist (@exist (t',π') prf') eq' with unk_viewc t' := {
+            | unkview_prod na A B := give (tLambda na A (tApp (tErr m u) B)) ρ;
+            | unkview_other _ ht := give (tErr m u) π
+            }
           } ;
         |  @exist None bot := give (tErr m u) π
       } ;
@@ -692,10 +696,32 @@ Corollary R_Acc_aux :
   Next Obligation.
     todo "unk t".
   Qed.
+  Next Obligation.
+    todo "unk t".
+  Qed.
+  Next Obligation.
+    todo "unk t".
+  Qed.
+  Next Obligation.
+    todo "unk t".
+  Qed.
+  Next Obligation.
+    todo "unk t".
+  Qed.
+  Next Obligation.
+    todo "unk t".
+  Qed.
+  
 
   (* tErr *)
   Next Obligation.
     todo "err prod".
+  Qed.
+  Next Obligation.
+    todo "err t".
+  Qed.
+  Next Obligation.
+    todo "err t".
   Qed.
   Next Obligation.
     todo "err t".

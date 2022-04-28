@@ -1,10 +1,13 @@
 From MetaCoq.Template Require Import TemplateMonad config utils Loader.
 From MetaCoq.PCUIC Require Import PCUICAst PCUICToTemplate PCUICPretty PCUICSN PCUICTyping PCUICNormal.
 From MetaCoq.SafeChecker Require Import PCUICErrors SafeTemplateChecker PCUICWfEnvImpl PCUICWfEnv PCUICSafeChecker PCUICSafeReduce.
-From Coq Require Import Nat.
 Import MCMonadNotation.
 
 Global Existing Instance PCUICSN.default_normalizing.
+
+Check typecheck_program.
+Check PCUICSafeReduce.hnf.
+Check check_wf_type.
 
 Axiom castcic_unk : forall (A : Type), A.
 Axiom castcic_err : forall (A : Type), A.
@@ -25,32 +28,35 @@ Program Definition eval_compute_cheat (cf := default_checker_flags)
     [] p'.2 (todo "welltyped") in
     PCUICToTemplate.trans tm.
 
-Definition even (n : nat) :=
-  match n with
-  | 0 => True
-  | S m => False
-  end.
-
-Definition idM := forall A, A -> A.
-MetaCoq Quote Recursively Definition foo := (unk idM).
-Definition bar := Eval lazy in eval_compute_cheat foo Monomorphic_ctx.
-Print bar.
-MetaCoq Unquote Definition baz := bar.
-Print baz.
-
-MetaCoq Quote Definition foo := Eval lazy in (even (unk nat)).
-MetaCoq Quote Recursively Definition foo' := (add0 (err nat)).
-Definition foo'' := Eval lazy in trans_program (foo'.1, foo).
+MetaCoq Quote Recursively Definition foo := (1 + pred (1 + (unk nat))).
+Definition foo' := Eval lazy in eval_compute_cheat foo Monomorphic_ctx.
+MetaCoq Unquote Definition foo'' := foo'.
 Print foo''.
-Definition pd :=
-  match foo''.2 with
-  | tCase _ p _ _ => p
-  | _ => mk_predicate [] [] [] (tRel 1000)
+
+Definition temp := unk ((fun (n : nat) => forall (A B: Type), B) 0).
+MetaCoq Quote Recursively Definition bar := temp.
+Definition bar' := Eval lazy in eval_compute_cheat bar Monomorphic_ctx.
+Print bar'.
+MetaCoq Unquote Definition bar'' := bar'.
+Print temp.
+Print bar''.
+
+Inductive listn : nat -> Set :=
+| niln : listn 0
+| consn : forall n:nat, nat -> listn n -> listn (S n).
+Definition tail n (v: listn (S n)) :=
+  match v in listn (S m) return listn m with
+  | niln => False_rect unit
+  | consn n' a y => y
   end.
-Definition mk_pred_lambda p :=
-  it_mkLambda_or_LetIn (inst_case_predicate_context p) (preturn p).
-Eval lazy in (mk_pred_lambda pd).
-Definition baz := Eval lazy in eval_compute_cheat foo' Monomorphic_ctx.
-Print baz.
-MetaCoq Unquote Definition baz' := baz.
-Print baz'.
+Program Definition add_0_n (n : nat) :=
+  match n as z return n + 0 = n with
+  | 0 => _
+  | _ => _
+  end.
+
+MetaCoq Quote Recursively Definition baar := (add_0_n (unk nat)).
+Print baar.
+Definition baar' := Eval lazy in eval_compute_cheat baar Monomorphic_ctx.
+MetaCoq Unquote Definition b := baar'.
+Print b.
